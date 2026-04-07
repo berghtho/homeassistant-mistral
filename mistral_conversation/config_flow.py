@@ -228,13 +228,15 @@ class MistralSubentryFlowHandler(ConfigSubentryFlow):
                 user_input.pop(CONF_LLM_HASS_API, None)
 
             if user_input[CONF_RECOMMENDED]:
+                data = options.copy()
+                data.update({k: v for k, v in user_input.items() if k != CONF_NAME})
                 if self._is_new:
                     title = user_input.pop(CONF_NAME)
-                    return self.async_create_entry(title=title, data=user_input)
+                    return self.async_create_entry(title=title, data=data)
                 return self.async_update_and_abort(
                     self._get_entry(),
                     self._get_reconfigure_subentry(),
-                    data=user_input,
+                    data=data,
                 )
 
             options.update(user_input)
