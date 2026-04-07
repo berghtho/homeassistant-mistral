@@ -26,7 +26,7 @@ from .const import (
     RECOMMENDED_AI_TASK_OPTIONS,
     RECOMMENDED_CONVERSATION_OPTIONS,
 )
-from .entity import MistralBaseLLMEntity, _build_messages
+from .entity import MistralBaseLLMEntity
 from .mistral_client import MistralClient
 
 PLATFORMS = (Platform.CONVERSATION, Platform.AI_TASK)

@@ -5,23 +5,6 @@ from __future__ import annotations
 from typing import Any
 import logging
 import voluptuous as vol
-# Oben bei den Importen in config_flow.py sicherstellen:
-from homeassistant.helpers.selector import (
-    NumberSelector,
-    NumberSelectorConfig,
-    SelectOptionDict,
-    SelectSelector,
-    SelectSelectorConfig,
-    SelectSelectorMode,
-    TemplateSelector,
-    EntitySelector,        # Neu
-    EntitySelectorConfig,  # Neu
-)
-from .const import (
-    # ... deine anderen consts
-    CONF_DEFAULT_MEDIA_PLAYER,
-    DEFAULT_VOICE_BOX,
-)
 
 from homeassistant.config_entries import (
     ConfigEntry,
@@ -36,6 +19,8 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import llm
 from homeassistant.helpers.httpx_client import get_async_client
 from homeassistant.helpers.selector import (
+    EntitySelector,
+    EntitySelectorConfig,
     NumberSelector,
     NumberSelectorConfig,
     SelectOptionDict,
@@ -47,7 +32,9 @@ from homeassistant.helpers.selector import (
 from homeassistant.helpers.typing import VolDictType
 
 from .const import (
+    CHAT_MODELS,
     CONF_CHAT_MODEL,
+    CONF_DEFAULT_MEDIA_PLAYER,
     CONF_MAX_TOKENS,
     CONF_PROMPT,
     CONF_REASONING_EFFORT,
@@ -56,6 +43,7 @@ from .const import (
     CONF_TOP_P,
     DEFAULT_AI_TASK_NAME,
     DEFAULT_CONVERSATION_NAME,
+    DEFAULT_VOICE_BOX,
     DOMAIN,
     RECOMMENDED_AI_TASK_OPTIONS,
     RECOMMENDED_CHAT_MODEL,
@@ -65,10 +53,6 @@ from .const import (
     RECOMMENDED_TEMPERATURE,
     RECOMMENDED_TOP_P,
     UNSUPPORTED_MODELS,
-# --- DIESE DREI HINZUFÜGEN ---
-    CHAT_MODELS,
-    CONF_DEFAULT_MEDIA_PLAYER,
-    DEFAULT_VOICE_BOX,    
 )
 from .mistral_client import MistralClient
 
@@ -207,66 +191,36 @@ class MistralSubentryFlowHandler(ConfigSubentryFlow):
             )
             step_schema[vol.Required(CONF_NAME, default=default_name)] = str
 
-        step_schema.update(
-            {
-                vol.Optional(
-                    CONF_CHAT_MODEL,
-                    description={
-                        "suggested_value": options.get(CONF_CHAT_MODEL, RECOMMENDED_CHAT_MODEL)
-                    },
-                ): SelectSelector(
-                    SelectSelectorConfig(
-                        options=CHAT_MODELS,
-                        mode=SelectSelectorMode.DROPDOWN,
-                        custom_value=True,
-                    )
-                ),
-                vol.Optional(
-                    CONF_PROMPT,
-                    description={
-                        "suggested_value": options.get(
-                            CONF_PROMPT, llm.DEFAULT_INSTRUCTIONS_PROMPT
-                        )
-                    },
-                ): TemplateSelector(),
-                vol.Optional(CONF_LLM_HASS_API): SelectSelector(
-                    SelectSelectorConfig(options=hass_apis, multiple=True)
-                ),
-                # Media Player Auswahl nur für Konversationen anzeigen
-                vol.Optional(
-                    CONF_DEFAULT_MEDIA_PLAYER,
-                    description={
-                        "suggested_value": options.get(CONF_DEFAULT_MEDIA_PLAYER, DEFAULT_VOICE_BOX)
-                    },
-                ): EntitySelector(
-                    EntitySelectorConfig(domain="media_player")
-                ),
-                vol.Required(
-                    CONF_RECOMMENDED,
-                    default=options.get(CONF_RECOMMENDED, True),
-                ): bool,
-            }
-        )
+        if self._subentry_type == "conversation":
+            step_schema.update(
+                {
+                    vol.Optional(
+                        CONF_PROMPT,
+                        description={
+                            "suggested_value": options.get(
+                                CONF_PROMPT, llm.DEFAULT_INSTRUCTIONS_PROMPT
+                            )
+                        },
+                    ): TemplateSelector(),
+                    vol.Optional(CONF_LLM_HASS_API): SelectSelector(
+                        SelectSelectorConfig(options=hass_apis, multiple=True)
+                    ),
+                    vol.Optional(
+                        CONF_DEFAULT_MEDIA_PLAYER,
+                        description={
+                            "suggested_value": options.get(
+                                CONF_DEFAULT_MEDIA_PLAYER, DEFAULT_VOICE_BOX
+                            )
+                        },
+                    ): EntitySelector(EntitySelectorConfig(domain="media_player")),
+                }
+            )
 
-        step_schema.update(
-            {
-                vol.Optional(
-                    CONF_PROMPT,
-                    description={
-                        "suggested_value": options.get(
-                            CONF_PROMPT, llm.DEFAULT_INSTRUCTIONS_PROMPT
-                        )
-                    },
-                ): TemplateSelector(),
-                vol.Optional(CONF_LLM_HASS_API): SelectSelector(
-                    SelectSelectorConfig(options=hass_apis, multiple=True)
-                ),
-                vol.Required(
-                    CONF_RECOMMENDED,
-                    default=options.get(CONF_RECOMMENDED, True),
-                ): bool,
-            }
-        )
+        step_schema[
+            vol.Required(
+                CONF_RECOMMENDED, default=options.get(CONF_RECOMMENDED, True)
+            )
+        ] = bool
 
         errors: dict[str, str] = {}
         if user_input is not None:
@@ -274,13 +228,15 @@ class MistralSubentryFlowHandler(ConfigSubentryFlow):
                 user_input.pop(CONF_LLM_HASS_API, None)
 
             if user_input[CONF_RECOMMENDED]:
+                data = options.copy()
+                data.update({k: v for k, v in user_input.items() if k != CONF_NAME})
                 if self._is_new:
                     title = user_input.pop(CONF_NAME)
-                    return self.async_create_entry(title=title, data=user_input)
+                    return self.async_create_entry(title=title, data=data)
                 return self.async_update_and_abort(
                     self._get_entry(),
                     self._get_reconfigure_subentry(),
-                    data=user_input,
+                    data=data,
                 )
 
             options.update(user_input)
